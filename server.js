@@ -1,9 +1,13 @@
-// Import packages, initialize an express app, and define the port you will use
+const express = require("express");
+const { body, validationResult } = require("express-validator");
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
 
 
-
-// Data for the server
-const menuItems = [
+let menu = [
   {
     id: 1,
     name: "Classic Burger",
@@ -60,4 +64,79 @@ const menuItems = [
   }
 ];
 
-// Define routes and implement middleware here
+const requestLogger = (req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
+
+  if (req.method === "POST" || req.method === "PUT") {
+    console.log("Request Body:", req.body);
+  }
+
+  next();
+};
+
+app.use(requestLogger);
+
+const menuValidation = [
+  body("name").isString().isLength({ min: 3 }),
+  body("description").isString().isLength({ min: 10 }),
+  body("price").isFloat({ gt: 0 }),
+  body("category").isIn(["appetizer", "entree", "dessert", "beverage"]),
+  body("ingredients").isArray({ min: 1 }),
+  body("available").optional().isBoolean()
+];
+
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  next();
+};
+
+
+app.get("/api/menu", (req, res) => {
+  res.status(200).json(menu);
+});
+
+// GET one menu item
+app.get("/api/menu/:id", (req, res) => {
+  const item = menu.find(m => m.id === parseInt(req.params.id));
+  if (!item) {
+    return res.status(404).json({ message: "Menu item not found" });
+  }
+  res.status(200).json(item);
+});
+
+// POST new menu item
+app.post("/api/menu", menuValidation, handleValidationErrors, (req, res) => {
+  const newItem = {
+    id: menu.length + 1,
+    available: true,
+    ...req.body
+  };
+  menu.push(newItem);
+  res.status(201).json(newItem);
+});
+
+app.put("/api/menu/:id", menuValidation, handleValidationErrors, (req, res) => {
+  const index = menu.findIndex(m => m.id === parseInt(req.params.id));
+  if (index === -1) {
+    return res.status(404).json({ message: "Menu item not found" });
+  }
+  menu[index] = { ...menu[index], ...req.body };
+  res.status(200).json(menu[index]);
+});
+
+app.delete("/api/menu/:id", (req, res) => {
+  const index = menu.findIndex(m => m.id === parseInt(req.params.id));
+  if (index === -1) {
+    return res.status(404).json({ message: "Menu item not found" });
+  }
+  const deleted = menu.splice(index, 1);
+  res.status(200).json(deleted[0]);
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
